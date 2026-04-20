@@ -13,6 +13,7 @@ struct ContentView: View {
     @Query(sort: \Match.date, order: .reverse) private var matches: [Match]
 
     @State private var selectedMatch: Match?
+    @State private var showingNewMatch = false
 
     var body: some View {
         NavigationSplitView {
@@ -32,7 +33,18 @@ struct ContentView: View {
             .navigationTitle("Matches")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) { EditButton() }
-                ToolbarItem { Button(action: addSampleMatch) { Label("Add", systemImage: "plus") } }
+                ToolbarItem { Button(action: { showingNewMatch = true }) { Label("Add", systemImage: "plus") } }
+            }
+            .sheet(isPresented: $showingNewMatch) {
+                MatchCreator { result in
+                    switch result {
+                    case .cancel:
+                        break
+                    case .save(let match):
+                        modelContext.insert(match)
+                        selectedMatch = match
+                    }
+                }
             }
         } detail: {
             if let match = selectedMatch {
@@ -41,13 +53,6 @@ struct ContentView: View {
                 Text("Select or add a match")
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    private func addSampleMatch() {
-        withAnimation {
-            let match = Match.makeSample()
-            modelContext.insert(match)
         }
     }
 
@@ -93,7 +98,7 @@ struct MatchDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             if let player = e.player {
-                                Text("#\(player.number) \(player.name) — \(player.team)")
+                                Text("\(player.displayName)")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -177,41 +182,44 @@ fileprivate struct EventEditor: View {
 
     // Editable fields
     @State private var name: String = ""
-    @State private var timestamp: Date = .now
     @State private var turn: Int = 1
     @State private var type: SPPEventType = .completion
     @State private var selectedPlayer: Player? = nil
+    @State private var selectedTeam: String = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Basics") {
-                    TextField("Optional note", text: $name)
-                    Stepper(value: $turn, in: 1...16) {
-                        HStack {
-                            Text("Turn")
-                            Spacer()
-                            Text("\(turn)").monospacedDigit()
-                        }
-                    }
-                    Picker("Type", selection: $type) {
-                        ForEach(SPPEventType.allCases) { t in
-                            Text(t.rawValue.capitalized).tag(t)
-                        }
-                    }
-                    DatePicker("Time", selection: $timestamp, displayedComponents: [.hourAndMinute])
+                // Team selection
+                Picker("Team", selection: $selectedTeam) {
+                    Text(match.teamA).tag(match.teamA)
+                    Text(match.teamB).tag(match.teamB)
                 }
-
-                Section("Player") {
-                    Picker("Player", selection: Binding(get: { selectedPlayer?.id }, set: { id in
-                        selectedPlayer = match.players.first(where: { $0.id == id })
-                    })) {
-                        Text("None").tag(Optional<UUID>.none)
-                        ForEach(match.players) { p in
-                            Text("#\(p.number) \(p.name) — \(p.team)").tag(Optional.some(p.id))
-                        }
+                // Player selection (filtered by team)
+                Picker("Player", selection: Binding(get: { selectedPlayer?.id }, set: { id in
+                    selectedPlayer = match.players.first(where: { $0.id == id })
+                })) {
+                    ForEach(match.players.filter { $0.team == selectedTeam }) { p in
+                        Text("#\(p.number)").tag(Optional.some(p.id))
                     }
                 }
+                // Turn
+                Stepper(value: $turn, in: 1...16) {
+                    HStack {
+                        Text("Turn")
+                        Spacer()
+                        Text("\(turn)").monospacedDigit()
+                    }
+                }
+                // Type
+                Picker("Type", selection: $type) {
+                    ForEach(SPPEventType.allCases) { t in
+                        Text(t.rawValue.capitalized).tag(t)
+                    }
+                }
+                // Optional note
+                TextField("Note (optional)", text: $name, axis: .vertical)
+                    .lineLimit(3, reservesSpace: true)
             }
             .navigationTitle(event == nil ? "New Event" : "Edit Event")
             .toolbar {
@@ -228,7 +236,7 @@ fileprivate struct EventEditor: View {
                         }
                         resultEvent.name = name
                         resultEvent.turn = turn
-                        resultEvent.timestamp = timestamp
+                        resultEvent.timestamp = .now
                         resultEvent.type = type
                         resultEvent.player = selectedPlayer
                         onComplete(.save(resultEvent))
@@ -249,23 +257,76 @@ fileprivate struct EventEditor: View {
     private func load() {
         if let e = event {
             name = e.name
-            timestamp = e.timestamp
             turn = e.turn
             type = e.type
             selectedPlayer = e.player
+            selectedTeam = e.player?.team ?? match.teamA
         } else {
             // Defaults for new event
             name = ""
-            timestamp = .now
             turn = min(max(1, lastTurnGuess()), 16)
             type = .completion
             selectedPlayer = nil
+            selectedTeam = match.teamA
         }
     }
 
     private func lastTurnGuess() -> Int {
         let lastTurn = match.events.map(\.turn).max() ?? 0
         return min(lastTurn + 1, 16)
+    }
+}
+
+fileprivate struct MatchCreator: View {
+    enum Result { case cancel, save(Match) }
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var teamA: String = ""
+    @State private var teamB: String = ""
+    @State private var name: String = ""
+    let onComplete: (Result) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Teams") {
+                    TextField("Home team", text: $teamA)
+                    TextField("Away team", text: $teamB)
+                }
+                Section("Match") {
+                    TextField("Match name (optional)", text: $name)
+                }
+            }
+            .navigationTitle("New Match")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onComplete(.cancel); dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        let finalName: String = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(teamA) vs \(teamB)" : name
+                        let match = Match(name: finalName, date: .now, teamA: teamA, teamB: teamB)
+                        // Auto-create 16 players per team, no events
+                        for i in 1...16 {
+                            match.players.append(Player(number: i, team: teamA, match: match))
+                        }
+                        for i in 1...16 {
+                            match.players.append(Player(number: i, team: teamB, match: match))
+                        }
+                        onComplete(.save(match))
+                        dismiss()
+                    }
+                    .disabled(!isValid)
+                }
+            }
+        }
+    }
+
+    private var isValid: Bool {
+        !teamA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !teamB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        teamA != teamB
     }
 }
 
