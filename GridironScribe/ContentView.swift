@@ -70,6 +70,8 @@ struct MatchDetailView: View {
 
     @State private var showingEditor = false
     @State private var editingEvent: SPPEvent? = nil
+    @State private var pendingType: SPPEventType? = nil
+    @State private var showPlayerPicker: Bool = false
 
     var body: some View {
         List {
@@ -77,6 +79,22 @@ struct MatchDetailView: View {
                 LabeledContent("Home", value: match.teamA)
                 LabeledContent("Away", value: match.teamB)
                 LabeledContent("Date", value: match.date.formatted(date: .abbreviated, time: .shortened))
+            }
+            
+            Section("Quick Add") {
+                EventTypePad { selected in
+                    pendingType = selected
+                    withAnimation { showPlayerPicker = true }
+                }
+                if showPlayerPicker, let type = pendingType {
+                    PlayerQuickGrid(teamA: match.teamA, teamB: match.teamB, players: match.players) { player in
+                        addQuick(type, for: player)
+                        withAnimation {
+                            showPlayerPicker = false
+                            pendingType = nil
+                        }
+                    }
+                }
             }
 
             Section(header: eventsHeader) {
@@ -167,6 +185,106 @@ struct MatchDetailView: View {
             match.events.remove(at: idx)
         }
         modelContext.delete(event)
+    }
+
+    @ViewBuilder
+    private func quickButtons(for player: Player) -> some View {
+        HStack(spacing: 6) {
+            Button("+TD") { addQuick(.touchdown, for: player) }
+                .buttonStyle(.bordered)
+            Button("+CAS") { addQuick(.casualty, for: player) }
+                .buttonStyle(.bordered)
+            Button("+COMP") { addQuick(.completion, for: player) }
+                .buttonStyle(.bordered)
+            Button("+MVP") { addQuick(.mvp, for: player) }
+                .buttonStyle(.bordered)
+            Button("+INT") { addQuick(.interception, for: player) }
+                .buttonStyle(.bordered)
+        }
+        .labelStyle(.titleOnly)
+        .font(.caption)
+    }
+
+    private func addQuick(_ type: SPPEventType, for player: Player) {
+        let event = SPPEvent(
+            name: "",
+            turn: currentTurnGuess(),
+            type: type,
+            match: match,
+            player: player
+        )
+        modelContext.insert(event)
+        match.events.append(event)
+    }
+
+    private func currentTurnGuess() -> Int {
+        // Guess based on highest existing turn in the match; clamp to 1...16
+        let highest = match.events.map(\.turn).max() ?? 0
+        return min(max(highest + 1, 1), 16)
+    }
+}
+
+fileprivate struct EventTypePad: View {
+    var onSelect: (SPPEventType) -> Void
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(SPPEventType.allCases, id: \.self) { t in
+                Button(t.shortLabel) { onSelect(t) }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+            }
+        }
+    }
+}
+
+fileprivate struct PlayerQuickGrid: View {
+    let teamA: String
+    let teamB: String
+    let players: [Player]
+    var onPick: (Player) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 44), spacing: 8)]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading) {
+                Text(teamA).font(.headline)
+                WrapGrid(players: players.filter { $0.team == teamA }, onPick: onPick)
+            }
+            VStack(alignment: .leading) {
+                Text(teamB).font(.headline)
+                WrapGrid(players: players.filter { $0.team == teamB }, onPick: onPick)
+            }
+        }
+    }
+}
+
+fileprivate struct WrapGrid: View {
+    let players: [Player]
+    var onPick: (Player) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 44), spacing: 8)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            ForEach(players.sorted(by: { $0.number < $1.number })) { p in
+                Button("#\(p.number)") { onPick(p) }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+            }
+        }
+    }
+}
+
+fileprivate extension SPPEventType {
+    var shortLabel: String {
+        switch self {
+        case .touchdown: return "TD"
+        case .casualty: return "CAS"
+        case .completion: return "COMP"
+        case .mvp: return "MVP"
+        case .interception: return "INT"
+        }
     }
 }
 
