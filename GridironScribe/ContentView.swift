@@ -66,7 +66,7 @@ struct ContentView: View {
 // Simple detail to inspect and manage events
 struct MatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @State var match: Match
+    let match: Match
 
     @State private var showingEditor = false
     @State private var editingEvent: SPPEvent? = nil
@@ -98,7 +98,7 @@ struct MatchDetailView: View {
             }
 
             Section(header: eventsHeader) {
-                ForEach(match.events) { e in
+                ForEach(match.sortedEvents) { e in
                     Button {
                         editingEvent = e
                         showingEditor = true
@@ -115,11 +115,9 @@ struct MatchDetailView: View {
                             Text("Turn \(e.turn) • \(e.timestamp.formatted(date: .omitted, time: .shortened))")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            if let player = e.player {
-                                Text("\(player.displayName)")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("\(e.player.displayName)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                             if !e.name.isEmpty {
                                 Text(e.name)
                                     .font(.footnote)
@@ -249,11 +247,11 @@ fileprivate struct PlayerQuickGrid: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading) {
                 Text(teamA).font(.headline)
-                WrapGrid(players: players.filter { $0.team == teamA }, onPick: onPick)
+                WrapGrid(players: players.filter { $0.side == .home }, onPick: onPick)
             }
             VStack(alignment: .leading) {
                 Text(teamB).font(.headline)
-                WrapGrid(players: players.filter { $0.team == teamB }, onPick: onPick)
+                WrapGrid(players: players.filter { $0.side == .away }, onPick: onPick)
             }
         }
     }
@@ -302,23 +300,35 @@ fileprivate struct EventEditor: View {
     @State private var name: String = ""
     @State private var turn: Int = 1
     @State private var type: SPPEventType = .completion
-    @State private var selectedPlayer: Player? = nil
-    @State private var selectedTeam: String = ""
+    @State private var selectedPlayer: Player
+    @State private var selectedSide: TeamSide = .home
+
+    init(match: Match, event: SPPEvent?, onComplete: @escaping (Result) -> Void) {
+        self.match = match
+        self.event = event
+        self.onComplete = onComplete
+
+        // Default player = first player of home team (safe fallback)
+        let defaultPlayer = match.players.first!
+
+        _selectedPlayer = State(initialValue: event?.player ?? defaultPlayer)
+        _selectedSide = State(initialValue: event?.player.side ?? .home)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                // Team selection
-                Picker("Team", selection: $selectedTeam) {
-                    Text(match.teamA).tag(match.teamA)
-                    Text(match.teamB).tag(match.teamB)
+                // Team selection by side
+                Picker("Team", selection: $selectedSide) {
+                    Text(match.teamA).tag(TeamSide.home)
+                    Text(match.teamB).tag(TeamSide.away)
                 }
-                // Player selection (filtered by team)
-                Picker("Player", selection: Binding(get: { selectedPlayer?.id }, set: { id in
-                    selectedPlayer = match.players.first(where: { $0.id == id })
-                })) {
-                    ForEach(match.players.filter { $0.team == selectedTeam }) { p in
-                        Text("#\(p.number)").tag(Optional.some(p.id))
+                // Player selection (filtered by side)
+                let filteredPlayers = match.players.filter { $0.side == selectedSide }
+
+                Picker("Player", selection: $selectedPlayer) {
+                    ForEach(filteredPlayers, id: \.id) { p in
+                        Text("#\(p.number)").tag(p)
                     }
                 }
                 // Turn
@@ -378,14 +388,16 @@ fileprivate struct EventEditor: View {
             turn = e.turn
             type = e.type
             selectedPlayer = e.player
-            selectedTeam = e.player?.team ?? match.teamA
+            selectedSide = e.player.side
         } else {
-            // Defaults for new event
             name = ""
             turn = min(max(1, lastTurnGuess()), 16)
             type = .completion
-            selectedPlayer = nil
-            selectedTeam = match.teamA
+
+            // ensure player matches selected side
+            if let first = match.players.first(where: { $0.side == selectedSide }) {
+                selectedPlayer = first
+            }
         }
     }
 
@@ -427,10 +439,10 @@ fileprivate struct MatchCreator: View {
                         let match = Match(name: finalName, date: .now, teamA: teamA, teamB: teamB)
                         // Auto-create 16 players per team, no events
                         for i in 1...16 {
-                            match.players.append(Player(number: i, team: teamA, match: match))
+                            match.players.append(Player(number: i, side: .home, match: match))
                         }
                         for i in 1...16 {
-                            match.players.append(Player(number: i, team: teamB, match: match))
+                            match.players.append(Player(number: i, side: .away, match: match))
                         }
                         onComplete(.save(match))
                         dismiss()

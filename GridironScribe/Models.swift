@@ -8,9 +8,15 @@
 import Foundation
 import SwiftData
 
+enum TeamSide: String, Codable, CaseIterable, Identifiable {
+    case home
+    case away
+    var id: String { rawValue }
+}
+
 @Model
 final class Match {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var date: Date
     var teamA: String
@@ -34,52 +40,65 @@ final class Match {
         self.events = events
     }
 
-    // Derived stats
-    var totalSPPTeamA: Int { totalSPP(forTeamNamed: teamA) }
-    var totalSPPTeamB: Int { totalSPP(forTeamNamed: teamB) }
+    func teamName(for side: TeamSide) -> String { side == .home ? teamA : teamB }
 
-    func totalSPP(forTeamNamed team: String) -> Int {
-        events.filter { $0.player?.team == team }.reduce(0) { $0 + ($1.type.sppValue) }
+    var totalSPPTeamA: Int { events.filter { $0.player.side == .home }.reduce(0) { $0 + $1.type.sppValue } }
+    var totalSPPTeamB: Int { events.filter { $0.player.side == .away }.reduce(0) { $0 + $1.type.sppValue } }
+}
+
+extension Match {
+    var sortedEvents: [SPPEvent] {
+        events.sorted {
+            if $0.turn != $1.turn {
+                return $0.turn < $1.turn
+            }
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
     }
 }
 
 @Model
 final class Player {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var number: Int
-    var team: String // Store the team name to associate with teamA/teamB
+    var side: TeamSide
 
     @Relationship var match: Match?
 
-    // Convenience aggregation
-    @Relationship(deleteRule: .cascade, inverse: \SPPEvent.player)
-    var events: [SPPEvent]
-
-    init(id: UUID = UUID(), number: Int, team: String, match: Match? = nil, events: [SPPEvent] = []) {
+    init(id: UUID = UUID(), number: Int, side: TeamSide, match: Match? = nil, events: [SPPEvent] = []) {
         self.id = id
         self.number = number
-        self.team = team
+        self.side = side
         self.match = match
-        self.events = events
     }
 
-    var sppTotal: Int { events.reduce(0) { $0 + $1.type.sppValue } }
+    var sppTotal: Int {
+        match?.events
+            .filter { $0.player == self }
+            .reduce(0) { $0 + $1.type.sppValue } ?? 0
+    }
 
-    var displayName: String { "\(team) #\(number)" }
+    var displayName: String {
+        let teamName = match?.teamName(for: side) ?? (side == .home ? "Home" : "Away")
+        return "\(teamName) #\(number)"
+    }
 }
 
 @Model
 final class SPPEvent {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var timestamp: Date
     var turn: Int
     var typeRaw: String
 
-    @Relationship var match: Match?
-    @Relationship var player: Player?
+    @Relationship var match: Match
+    @Relationship var player: Player
 
-    init(id: UUID = UUID(), name: String, timestamp: Date = .now, turn: Int, type: SPPEventType, match: Match? = nil, player: Player? = nil) {
+    init(id: UUID = UUID(), name: String, timestamp: Date = .now, turn: Int, type: SPPEventType, match: Match, player: Player) {
         self.id = id
         self.name = name
         self.timestamp = timestamp
