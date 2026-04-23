@@ -1,0 +1,33 @@
+//
+//  EventTypePad.swift
+//  GridironScribe
+//
+//  Created by Christoph Freier on 23.04.26.
+//
+
+import SwiftUI
+
+struct EventTypePad: View {
+    var onSelect: (SPPEventType) -> Void
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(SPPEventType.allCases, id: \.self) { t in
+                Button(t.shortLabel) { onSelect(t) }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+            }
+        }
+    }
+}
+
+fileprivate extension SPPEventType {
+    var shortLabel: String {
+        switch self {
+        case .touchdown: return "TD"
+        case .casualty: return "CAS"
+        case .completion: return "COMP"
+        case .mvp: return "MVP"
+        case .interception: return "INT"
+        }
+    }
+}
