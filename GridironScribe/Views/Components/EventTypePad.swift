@@ -20,14 +20,14 @@ struct EventTypePad: View {
     }
 }
 
-fileprivate extension SPPEventType {
+extension SPPEventType {
     var shortLabel: String {
         switch self {
-        case .touchdown: return "TD"
-        case .casualty: return "CAS"
-        case .completion: return "COMP"
+        case .touchdown: return "Td"
+        case .casualty: return "Cas"
+        case .completion: return "Cp"
         case .mvp: return "MVP"
-        case .interception: return "INT"
+        case .interception: return "Int"
         }
     }
 }

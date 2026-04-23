@@ -13,6 +13,7 @@ struct MatchDetailView: View {
     let match: Match
 
     @State private var showingEditor = false
+    @State private var showingSummary = false
     @State private var editingEvent: SPPEvent? = nil
     @State private var pendingType: SPPEventType? = nil
     @State private var showPlayerPicker: Bool = false
@@ -80,7 +81,19 @@ struct MatchDetailView: View {
         .navigationTitle(match.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button { addNewEvent() } label: { Label("Add Event", systemImage: "plus") }
+                Button {
+                    addNewEvent()
+                } label: {
+                    Label("Add Event", systemImage: "plus")
+                }
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingSummary = true
+                } label: {
+                    Label("Summary", systemImage: "list.bullet.rectangle")
+                }
             }
         }
         .sheet(isPresented: $showingEditor) {
@@ -104,6 +117,9 @@ struct MatchDetailView: View {
                 }
                 editingEvent = nil
             }
+        }
+        .sheet(isPresented: $showingSummary) {
+            MatchSummaryView(match: match)
         }
     }
 

@@ -63,6 +63,8 @@ struct ContentView: View {
     }
 }
 
+
+
 #Preview {
     ContentView()
         .modelContainer(for: [Match.self, Player.self, SPPEvent.self], inMemory: true)
