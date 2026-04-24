@@ -6,11 +6,21 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct MatchSummaryView: View {
     let match: Match
-
     @Environment(\.dismiss) private var dismiss
+    @Query private var events: [SPPEvent]
+
+    init(match: Match) {
+        self.match = match
+        let matchID = match.id
+        self._events = Query(
+            filter: #Predicate<SPPEvent> { $0.match.id == matchID },
+            sort: \.timestamp
+        )
+    }
 
     struct PlayerStats: Identifiable {
         let id: UUID
@@ -19,17 +29,30 @@ struct MatchSummaryView: View {
         let completions: Int
         let touchdowns: Int
         let interceptions: Int
-        let casualties: Int
+        let badlyHurt: Int
+        let seriouslyInjured: Int
+        let killed: Int
+        let misc: Int
+
+        var totalSPP: Int {
+            (isMVP ? SPPEventType.mvp.sppValue : 0)
+            + completions * SPPEventType.completion.sppValue
+            + touchdowns * SPPEventType.touchdown.sppValue
+            + interceptions * SPPEventType.interception.sppValue
+            + (badlyHurt + seriouslyInjured + killed) * SPPEventType.casualty.sppValue
+            + misc * SPPEventType.misc.sppValue
+        }
     }
 
     // MARK: - Preprocessing
 
     private var eventsByPlayer: [UUID: [SPPEvent]] {
-        Dictionary(grouping: match.events) { $0.player.id }
+        Dictionary(grouping: events) { $0.player.id }
     }
 
     private func stats(for player: Player) -> PlayerStats {
         let events = eventsByPlayer[player.id] ?? []
+        let casualties = events.filter { $0.type == .casualty }
 
         return PlayerStats(
             id: player.id,
@@ -38,7 +61,10 @@ struct MatchSummaryView: View {
             completions: events.filter { $0.type == .completion }.count,
             touchdowns: events.filter { $0.type == .touchdown }.count,
             interceptions: events.filter { $0.type == .interception }.count,
-            casualties: events.filter { $0.type == .casualty }.count
+            badlyHurt: casualties.filter { ($0.casualtyKind ?? .badlyHurt) == .badlyHurt }.count,
+            seriouslyInjured: casualties.filter { $0.casualtyKind == .seriouslyInjured }.count,
+            killed: casualties.filter { $0.casualtyKind == .killed }.count,
+            misc: events.filter { $0.type == .misc }.count
         )
     }
 
@@ -51,7 +77,10 @@ struct MatchSummaryView: View {
                 $0.completions > 0 ||
                 $0.touchdowns > 0 ||
                 $0.interceptions > 0 ||
-                $0.casualties > 0 ||
+                $0.badlyHurt > 0 ||
+                $0.seriouslyInjured > 0 ||
+                $0.killed > 0 ||
+                $0.misc > 0 ||
                 $0.isMVP
             }
     }
@@ -96,12 +125,16 @@ struct MatchSummaryView: View {
 
     private var headerRow: some View {
         GridRow {
-            Text("#").bold()
+            Text("")
             Text(SPPEventType.mvp.shortLabel)
             Text(SPPEventType.completion.shortLabel)
             Text(SPPEventType.touchdown.shortLabel)
             Text(SPPEventType.interception.shortLabel)
-            Text(SPPEventType.casualty.shortLabel)
+            Text(CasualtyKind.badlyHurt.shortLabel)
+            Text(CasualtyKind.seriouslyInjured.shortLabel)
+            Text(CasualtyKind.killed.shortLabel)
+            Text(SPPEventType.misc.shortLabel)
+            Text("SPP").bold()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -111,7 +144,7 @@ struct MatchSummaryView: View {
         GridRow {
             Text(name)
                 .font(.headline)
-                .gridCellColumns(6)
+                .gridCellColumns(10)
         }
     }
 
@@ -123,7 +156,11 @@ struct MatchSummaryView: View {
                 Text("\(s.completions)")
                 Text("\(s.touchdowns)")
                 Text("\(s.interceptions)")
-                Text("\(s.casualties)")
+                Text("\(s.badlyHurt)")
+                Text("\(s.seriouslyInjured)")
+                Text("\(s.killed)")
+                Text("\(s.misc)")
+                Text("\(s.totalSPP)").bold()
             }
             .font(.subheadline)
         }

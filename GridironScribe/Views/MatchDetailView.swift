@@ -16,6 +16,7 @@ struct MatchDetailView: View {
     @State private var showingSummary = false
     @State private var editingEvent: SPPEvent? = nil
     @State private var pendingType: SPPEventType? = nil
+    @State private var pendingCasualtyKind: CasualtyKind? = nil
     @State private var showPlayerPicker: Bool = false
 
     var body: some View {
@@ -27,16 +28,24 @@ struct MatchDetailView: View {
             }
             
             Section("Quick Add") {
-                EventTypePad { selected in
-                    pendingType = selected
+                EventTypePad { selectedType, kind in
+                    pendingType = selectedType
+                    pendingCasualtyKind = kind
                     withAnimation { showPlayerPicker = true }
                 }
+
                 if showPlayerPicker, let type = pendingType {
-                    PlayerQuickGrid(teamA: match.teamA, teamB: match.teamB, players: match.players) { player in
-                        addQuick(type, for: player)
+                    PlayerQuickGrid(
+                        teamA: match.teamA,
+                        teamB: match.teamB,
+                        players: match.players
+                    ) { player in
+                        addQuick(type, for: player, kind: pendingCasualtyKind)
+
                         withAnimation {
                             showPlayerPicker = false
                             pendingType = nil
+                            pendingCasualtyKind = nil
                         }
                     }
                 }
@@ -148,31 +157,36 @@ struct MatchDetailView: View {
     @ViewBuilder
     private func quickButtons(for player: Player) -> some View {
         HStack(spacing: 6) {
-            Button("+TD") { addQuick(.touchdown, for: player) }
+            Button(SPPEventType.touchdown.shortLabel) { addQuick(.touchdown, for: player) }
                 .buttonStyle(.bordered)
-            Button("+CAS") { addQuick(.casualty, for: player) }
+            Button(SPPEventType.casualty.shortLabel) { addQuick(.casualty, for: player) }
                 .buttonStyle(.bordered)
-            Button("+COMP") { addQuick(.completion, for: player) }
+            Button(SPPEventType.completion.shortLabel) { addQuick(.completion, for: player) }
                 .buttonStyle(.bordered)
-            Button("+MVP") { addQuick(.mvp, for: player) }
+            Button(SPPEventType.mvp.shortLabel) { addQuick(.mvp, for: player) }
                 .buttonStyle(.bordered)
-            Button("+INT") { addQuick(.interception, for: player) }
+            Button(SPPEventType.interception.shortLabel) { addQuick(.interception, for: player) }
                 .buttonStyle(.bordered)
         }
         .labelStyle(.titleOnly)
         .font(.caption)
     }
 
-    private func addQuick(_ type: SPPEventType, for player: Player) {
+    private func addQuick(
+        _ type: SPPEventType,
+        for player: Player,
+        kind: CasualtyKind? = nil
+    ) {
         let event = SPPEvent(
             name: "",
             turn: currentTurnGuess(),
             type: type,
             match: match,
-            player: player
+            player: player,
+            casualtyKind: kind
         )
         modelContext.insert(event)
-        match.events.append(event)
+        try? modelContext.save()
     }
 
     private func currentTurnGuess() -> Int {

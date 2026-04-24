@@ -8,26 +8,35 @@
 import SwiftUI
 
 struct EventTypePad: View {
-    var onSelect: (SPPEventType) -> Void
+    var onSelect: (SPPEventType, CasualtyKind?) -> Void
+
     var body: some View {
         HStack(spacing: 8) {
             ForEach(SPPEventType.allCases, id: \.self) { t in
-                Button(t.shortLabel) { onSelect(t) }
+
+                if t == .casualty {
+                    Button(t.shortLabel) {
+                        // Default quick action → BH
+                        onSelect(.casualty, .badlyHurt)
+                    }
                     .buttonStyle(.bordered)
                     .font(.caption)
-            }
-        }
-    }
-}
+                    .contextMenu {
+                        ForEach(CasualtyKind.allCases) { kind in
+                            Button(kind.shortLabel) {
+                                onSelect(.casualty, kind)
+                            }
+                        }
+                    }
 
-extension SPPEventType {
-    var shortLabel: String {
-        switch self {
-        case .touchdown: return "Td"
-        case .casualty: return "Cas"
-        case .completion: return "Cp"
-        case .mvp: return "MVP"
-        case .interception: return "Int"
+                } else {
+                    Button(t.shortLabel) {
+                        onSelect(t, nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                }
+            }
         }
     }
 }
