@@ -16,7 +16,12 @@ final class Player {
 
     @Relationship var match: Match?
 
-    init(id: UUID = UUID(), number: Int, side: TeamSide, match: Match? = nil, events: [SPPEvent] = []) {
+    init(
+        id: UUID = UUID(),
+        number: Int,
+        side: TeamSide,
+        match: Match? = nil
+    ) {
         self.id = id
         self.number = number
         self.side = side
@@ -25,7 +30,7 @@ final class Player {
 
     var sppTotal: Int {
         match?.events
-            .filter { $0.player == self }
+            .filter { $0.player.id == self.id }
             .reduce(0) { $0 + $1.type.sppValue } ?? 0
     }
 

@@ -15,8 +15,8 @@ struct WrapGrid: View {
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-            ForEach(players.sorted(by: { $0.number < $1.number })) { p in
-                Button("#\(p.number)") { onPick(p) }
+            ForEach(players.sorted { $0.number < $1.number }) { player in
+                Button("#\(player.number)") { onPick(player) }
                     .buttonStyle(.bordered)
                     .font(.caption)
             }

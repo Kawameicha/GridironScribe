@@ -16,15 +16,21 @@ final class Match {
     var teamA: String
     var teamB: String
 
-    // Players participating (both teams combined for simplicity)
     @Relationship(deleteRule: .cascade, inverse: \Player.match)
     var players: [Player]
 
-    // Events that occurred during the match
     @Relationship(deleteRule: .cascade, inverse: \SPPEvent.match)
     var events: [SPPEvent]
 
-    init(id: UUID = UUID(), name: String, date: Date = .now, teamA: String, teamB: String, players: [Player] = [], events: [SPPEvent] = []) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        date: Date = .now,
+        teamA: String,
+        teamB: String,
+        players: [Player] = [],
+        events: [SPPEvent] = []
+    ) {
         self.id = id
         self.name = name
         self.date = date
@@ -34,21 +40,29 @@ final class Match {
         self.events = events
     }
 
-    func teamName(for side: TeamSide) -> String { side == .home ? teamA : teamB }
+    static let defaultRosterSize = 16
 
-    var totalSPPTeamA: Int { events.filter { $0.player.side == .home }.reduce(0) { $0 + $1.type.sppValue } }
-    var totalSPPTeamB: Int { events.filter { $0.player.side == .away }.reduce(0) { $0 + $1.type.sppValue } }
+    func teamName(for side: TeamSide) -> String {
+        side == .home ? teamA : teamB
+    }
+
+    func totalSPP(for side: TeamSide) -> Int {
+        events
+            .filter { $0.player.side == side }
+            .reduce(0) { $0 + $1.type.sppValue }
+    }
+
+    var currentTurnGuess: Int {
+        let highest = events.map(\.turn).max() ?? 0
+        return min(max(highest, 1), Self.defaultRosterSize)
+    }
 }
 
 extension Match {
     var sortedEvents: [SPPEvent] {
         events.sorted {
-            if $0.turn != $1.turn {
-                return $0.turn < $1.turn
-            }
-            if $0.timestamp != $1.timestamp {
-                return $0.timestamp < $1.timestamp
-            }
+            if $0.turn != $1.turn { return $0.turn < $1.turn }
+            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
             return $0.id.uuidString < $1.id.uuidString
         }
     }
@@ -57,5 +71,6 @@ extension Match {
 enum TeamSide: String, Codable, CaseIterable, Identifiable {
     case home
     case away
+
     var id: String { rawValue }
 }

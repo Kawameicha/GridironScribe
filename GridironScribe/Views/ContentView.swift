@@ -13,6 +13,7 @@ struct ContentView: View {
     @Query(sort: \Match.date, order: .reverse) private var matches: [Match]
 
     @State private var selectedMatch: Match?
+    @State private var editingMatch: Match?
     @State private var showingNewMatch = false
 
     var body: some View {
@@ -21,30 +22,47 @@ struct ContentView: View {
                 ForEach(matches) { match in
                     NavigationLink(value: match) {
                         VStack(alignment: .leading) {
-                            Text(match.name).font(.headline)
+                            Text(match.name)
+                                .font(.headline)
                             Text("\(match.teamA) vs \(match.teamB) — \(match.date.formatted(date: .abbreviated, time: .shortened))")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            modelContext.delete(match)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+
+                        Button {
+                            editingMatch = match
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                 }
-                .onDelete(perform: deleteMatches)
             }
             .navigationTitle("Matches")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) { EditButton() }
-                ToolbarItem { Button(action: { showingNewMatch = true }) { Label("Add", systemImage: "plus") } }
+                ToolbarItem {
+                    Button { showingNewMatch = true } label: {
+                        Label("Add", systemImage: "plus")
+                    }
+                }
             }
             .sheet(isPresented: $showingNewMatch) {
-                MatchEditor { result in
-                    switch result {
-                    case .cancel:
-                        break
-                    case .save(let match):
+                MatchEditor(match: nil) { result in
+                    if case .save(let match) = result {
                         modelContext.insert(match)
                         selectedMatch = match
                     }
                 }
+            }
+            .sheet(item: $editingMatch) { match in
+                MatchEditor(match: match) { _ in }
             }
         } detail: {
             if let match = selectedMatch {
@@ -55,15 +73,7 @@ struct ContentView: View {
             }
         }
     }
-
-    private func deleteMatches(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets { modelContext.delete(matches[index]) }
-        }
-    }
 }
-
-
 
 #Preview {
     ContentView()

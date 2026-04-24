@@ -41,23 +41,36 @@ final class SPPEvent {
     }
 
     var type: SPPEventType {
-        get { SPPEventType(rawValue: typeRaw) ?? .completion }
+        get {
+            guard let value = SPPEventType(rawValue: typeRaw) else {
+                assertionFailure("Unknown SPPEventType raw value: '\(typeRaw)'")
+                return .completion
+            }
+            return value
+        }
         set { typeRaw = newValue.rawValue }
     }
 
     var casualtyKind: CasualtyKind? {
         get {
             guard let raw = casualtyKindRaw else { return nil }
-            return CasualtyKind(rawValue: raw)
+            guard let value = CasualtyKind(rawValue: raw) else {
+                assertionFailure("Unknown CasualtyKind raw value: '\(raw)'")
+                return nil
+            }
+            return value
         }
-        set {
-            casualtyKindRaw = newValue?.rawValue
-        }
+        set { casualtyKindRaw = newValue?.rawValue }
     }
 }
 
 enum SPPEventType: String, Codable, CaseIterable, Identifiable {
-    case touchdown, casualty, completion, mvp, interception, misc
+    case touchdown
+    case casualty
+    case completion
+    case mvp
+    case interception
+    case misc
 
     var id: String { rawValue }
 
@@ -77,7 +90,9 @@ enum SPPEventType: String, Codable, CaseIterable, Identifiable {
 }
 
 enum CasualtyKind: String, Codable, CaseIterable, Identifiable {
-    case badlyHurt, seriouslyInjured, killed
+    case badlyHurt
+    case seriouslyInjured
+    case killed
 
     var id: String { rawValue }
 

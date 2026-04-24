@@ -12,31 +12,33 @@ struct EventTypePad: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(SPPEventType.allCases, id: \.self) { t in
+            ForEach(SPPEventType.allCases) { type in
+                typeButton(for: type)
+            }
+        }
+    }
 
-                if t == .casualty {
-                    Button(t.shortLabel) {
-                        // Default quick action → BH
-                        onSelect(.casualty, .badlyHurt)
+    @ViewBuilder
+    private func typeButton(for type: SPPEventType) -> some View {
+        if type == .casualty {
+            Button(type.shortLabel) {
+                onSelect(.casualty, .badlyHurt)
+            }
+            .buttonStyle(.bordered)
+            .font(.caption)
+            .contextMenu {
+                ForEach(CasualtyKind.allCases) { kind in
+                    Button(kind.shortLabel) {
+                        onSelect(.casualty, kind)
                     }
-                    .buttonStyle(.bordered)
-                    .font(.caption)
-                    .contextMenu {
-                        ForEach(CasualtyKind.allCases) { kind in
-                            Button(kind.shortLabel) {
-                                onSelect(.casualty, kind)
-                            }
-                        }
-                    }
-
-                } else {
-                    Button(t.shortLabel) {
-                        onSelect(t, nil)
-                    }
-                    .buttonStyle(.bordered)
-                    .font(.caption)
                 }
             }
+        } else {
+            Button(type.shortLabel) {
+                onSelect(type, nil)
+            }
+            .buttonStyle(.bordered)
+            .font(.caption)
         }
     }
 }

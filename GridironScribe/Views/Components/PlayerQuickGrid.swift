@@ -13,18 +13,23 @@ struct PlayerQuickGrid: View {
     let players: [Player]
     var onPick: (Player) -> Void
 
-    private let columns = [GridItem(.adaptive(minimum: 44), spacing: 8)]
-
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading) {
-                Text(teamA).font(.headline)
-                WrapGrid(players: players.filter { $0.side == .home }, onPick: onPick)
-            }
-            VStack(alignment: .leading) {
-                Text(teamB).font(.headline)
-                WrapGrid(players: players.filter { $0.side == .away }, onPick: onPick)
-            }
+            teamColumn(
+                name: teamA,
+                players: players.filter { $0.side == .home }
+            )
+            teamColumn(
+                name: teamB,
+                players: players.filter { $0.side == .away }
+            )
+        }
+    }
+
+    private func teamColumn(name: String, players: [Player]) -> some View {
+        VStack(alignment: .leading) {
+            Text(name).font(.headline)
+            WrapGrid(players: players, onPick: onPick)
         }
     }
 }
