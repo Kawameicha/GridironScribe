@@ -12,45 +12,23 @@ struct MatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
     let match: Match
 
-    @State private var editorMode: EditorMode = .new
-    @State private var showingEditor = false
     @State private var showingSummary = false
     @State private var pendingType: SPPEventType? = nil
     @State private var pendingCasualtyKind: CasualtyKind? = nil
     @State private var showPlayerPicker: Bool = false
+    @State private var editorTarget: EditTarget? = nil
 
     // MARK: - Model
 
-    /// Tracks whether the event sheet is creating a new event or editing an existing one.
-    enum EditorMode {
-        case new
-        case edit(SPPEvent)
-    }
-
-    /// The current event being edited, or nil when creating a new one.
-    private var editingEvent: SPPEvent? {
-        if case .edit(let event) = editorMode { return event }
-        return nil
-    }
-
-    /// Guess the next turn based on the highest turn already recorded, clamped to 1…16.
-    /// Note: this increments from the highest existing turn, which may overshoot late in a match.
-    /// Adjust the logic here if you want to track the "current" game turn separately.
-    private var currentTurnGuess: Int {
-        let highest = match.events.map(\.turn).max() ?? 0
-        return min(max(highest, 1), 16)
+    private struct EditTarget: Identifiable {
+        let id = UUID()
+        let event: SPPEvent?
     }
 
     // MARK: - Body
 
     var body: some View {
         List {
-//            Section("Teams") {
-//                LabeledContent("Home", value: match.teamA)
-//                LabeledContent("Away", value: match.teamB)
-//                LabeledContent("Date", value: match.date.formatted(date: .abbreviated, time: .shortened))
-//            }
-
             Section("Quick Add") {
                 EventTypePad { selectedType, kind in
                     pendingType = selectedType
@@ -77,8 +55,7 @@ struct MatchDetailView: View {
             Section(header: eventsHeader) {
                 ForEach(match.sortedEvents) { event in
                     Button {
-                        editorMode = .edit(event)
-                        showingEditor = true
+                        editorTarget = EditTarget(event: event)
                     } label: {
                         eventRow(event)
                     }
@@ -91,8 +68,7 @@ struct MatchDetailView: View {
                         }
 
                         Button {
-                            editorMode = .edit(event)
-                            showingEditor = true
+                            editorTarget = EditTarget(event: event)
                         } label: {
                             Label("Edit", systemImage: "pencil")
                         }
@@ -105,8 +81,7 @@ struct MatchDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    editorMode = .new
-                    showingEditor = true
+                    editorTarget = EditTarget(event: nil)
                 } label: {
                     Label("Add Event", systemImage: "plus")
                 }
@@ -120,13 +95,13 @@ struct MatchDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingEditor) {
-            EventEditor(match: match, event: editingEvent) { result in
+        .sheet(item: $editorTarget) { target in
+            EventEditor(match: match, event: target.event) { result in
                 switch result {
                 case .cancel:
                     break
                 case .save(let updated):
-                    if let existing = editingEvent {
+                    if let existing = target.event {
                         existing.name = updated.name
                         existing.turn = updated.turn
                         existing.timestamp = updated.timestamp
@@ -137,7 +112,7 @@ struct MatchDetailView: View {
                         match.events.append(updated)
                     }
                 }
-                editorMode = .new
+                editorTarget = nil
             }
         }
         .sheet(isPresented: $showingSummary) {
@@ -189,7 +164,7 @@ struct MatchDetailView: View {
     ) {
         let event = SPPEvent(
             name: "",
-            turn: currentTurnGuess,
+            turn: match.currentTurnGuess,
             type: type,
             match: match,
             player: player,

@@ -28,6 +28,22 @@ struct EventEditor: View {
         self.match = match
         self.event = event
         self.onComplete = onComplete
+
+        if let e = event {
+            _name = State(initialValue: e.name)
+            _turn = State(initialValue: e.turn)
+            _type = State(initialValue: e.type)
+            _selectedSide = State(initialValue: e.player.side)
+            _selectedPlayer = State(initialValue: e.player)
+        } else {
+            let firstTurn = match.currentTurnGuess
+            let firstPlayer = match.players.first(where: { $0.side == .home })
+            _name = State(initialValue: "")
+            _turn = State(initialValue: firstTurn)
+            _type = State(initialValue: .completion)
+            _selectedSide = State(initialValue: .home)
+            _selectedPlayer = State(initialValue: firstPlayer)
+        }
     }
 
     // MARK: - Body
@@ -40,7 +56,6 @@ struct EventEditor: View {
                     Text(match.teamB).tag(TeamSide.away)
                 }
                 .onChange(of: selectedSide) { _, newSide in
-                    // Reset player to first on the newly selected side to avoid desync.
                     selectedPlayer = match.players.first(where: { $0.side == newSide })
                 }
 
@@ -78,7 +93,6 @@ struct EventEditor: View {
                         .disabled(!isValid)
                 }
             }
-            .onAppear(perform: load)
         }
     }
 
@@ -86,21 +100,6 @@ struct EventEditor: View {
 
     private var isValid: Bool {
         (1...16).contains(turn) && selectedPlayer != nil
-    }
-
-    private func load() {
-        if let e = event {
-            name = e.name
-            turn = e.turn
-            type = e.type
-            selectedPlayer = e.player
-        } else {
-            name = ""
-            turn = match.currentTurnGuess
-            type = .completion
-            selectedSide = .home
-            selectedPlayer = match.players.first(where: { $0.side == .home })
-        }
     }
 
     private func save() {
